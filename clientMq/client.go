@@ -14,6 +14,7 @@ type comsumer struct{
 	autoAck bool
 	handlePool int
 	handleFunc func([]byte)error
+	connClient *amqp.Connection
 	chanClients []*chanClient
 }
 type chanClient struct{
@@ -26,7 +27,7 @@ func (c *comsumer) Pull(){
 	isClosed := make(chan int)
 	for i:=0;i<c.handlePool;i++ {
 		if len(c.chanClients) == i {
-			chanel, err := c.newClientConn()
+			chanel, err := c.newChanel()
 			if err != nil {
 				fmt.Println("occur connection fatal :", err)
 				return
@@ -46,6 +47,7 @@ func (c *comsumer) Pull(){
 	<-isClosed
 }
 
+
 func NewComsumer(connStr,exchange,queue,routeKey,kind string,autoAck bool,handlePool int)*comsumer{
 	return &comsumer{
 		mqConnStr:connStr,
@@ -63,13 +65,24 @@ func (c *comsumer) RegisterHandleFunc(this func([]byte) error){
 	c.handleFunc=this
 }
 
-
-func (c *comsumer) newClientConn() (*amqp.Channel,error){
+func (c *comsumer) newConn()error{
 	conn,err := amqp.Dial(c.mqConnStr)
 	if err!=nil{
-		return nil,err
+		return err
 	}
-	mychan,err:= conn.Channel()
+	c.connClient= conn
+	return nil
+}
+
+
+func (c *comsumer) newChanel() (*amqp.Channel,error){
+	if c.connClient == nil{
+		err:= c.newConn()
+		if err !=nil{
+			return nil,err
+		}
+	}
+	mychan,err:= c.connClient.Channel()
 	if err!=nil{
 		return nil,err
 	}

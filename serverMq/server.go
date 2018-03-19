@@ -12,7 +12,9 @@ type producer struct{
 	kind string
 	routeKey string
 	autoAck bool
+	connClient *amqp.Connection
 	*amqp.Channel
+
 }
 
 func NewProducer(connStr,exchange,queue,routeKey,kind string,autoAck bool) *producer{
@@ -41,16 +43,36 @@ func (s *producer) Push(body []byte){
 	})
 }
 
-func (s *producer) newSerConn() (*amqp.Channel,error){
+
+func (s *producer) newConn()error{
 	conn,err := amqp.Dial(s.mqConnStr)
 	if err!=nil{
-		return nil,err
+		return err
 	}
-	mychan,err:= conn.Channel()
+	s.connClient= conn
+	return nil
+}
+
+func (s *producer) newSerConn() (*amqp.Channel,error){
+	if s.connClient == nil{
+		err:= s.newConn()
+		if err !=nil{
+			return nil,err
+		}
+	}
+	mychan,err:= s.connClient.Channel()
 	if err!=nil{
 		return nil,err
 	}
 	err = mychan.ExchangeDeclare(s.exchangeName,s.kind,true,false,false,false,nil)
+	if err !=nil {
+		return nil,err
+	}
+	_,err =mychan.QueueDeclare(s.queueName,true,false,false,false,nil)
+	if err !=nil {
+		return nil,err
+	}
+	err = mychan.QueueBind(s.queueName,s.routeKey,s.exchangeName,false,nil)
 	if err !=nil {
 		return nil,err
 	}

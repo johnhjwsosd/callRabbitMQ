@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	mqConnStr  = `amqp://xxxxx:xxxxx@www.xxxx.com:5672/`
+	mqConnStr  = `amqp://ll:123qwe@www.denlery.top:5672/`
 	exchange ="test.topic.1"
 	queue = "test.topic.queue.1"
 	queueKey = "t1"
