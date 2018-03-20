@@ -17,6 +17,13 @@ type producer struct{
 
 }
 
+
+// connStr 连接字符串
+// exchange exchange 名字
+// queue queue 名字
+// routeKey exchange 与queue 绑定key
+// kind exchange的Type direct fanout headers topic
+// autoAck 回应确认，暂未用
 func NewProducer(connStr,exchange,queue,routeKey,kind string,autoAck bool) *producer{
 	return &producer{
 		mqConnStr:connStr,
@@ -28,8 +35,8 @@ func NewProducer(connStr,exchange,queue,routeKey,kind string,autoAck bool) *prod
 	}
 }
 
-
-func (s *producer) Push(body []byte){
+//todo:处理data
+func (s *producer) Push(body []byte,data ...interface{}){
 	if s.Channel==nil {
 		chanel, err := s.newSerConn()
 		if err !=nil{
