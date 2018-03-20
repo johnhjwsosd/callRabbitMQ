@@ -1,11 +1,11 @@
-package clientMq
+package consumerMq
 
 import (
 	"github.com/streadway/amqp"
 	"fmt"
 )
 
-type comsumer struct{
+type consumer struct{
 	mqConnStr string
 	exchangeName string
 	queueName string
@@ -16,15 +16,15 @@ type comsumer struct{
 	handleFunc func([]byte)error
 	connClient *amqp.Connection
 	chanClients []*chanClient
+	isClosed chan int
 }
 type chanClient struct{
 	chanDelivery <-chan amqp.Delivery
 	chanel *amqp.Channel
 }
 
-func (c *comsumer) Pull(){
+func (c *consumer) Pull(){
 	var err error
-	isClosed := make(chan int)
 	for i:=0;i<c.handlePool;i++ {
 		if len(c.chanClients) == i {
 			chanel, err := c.newChanel()
@@ -44,12 +44,18 @@ func (c *comsumer) Pull(){
 			}
 		}(c.chanClients[i].chanDelivery)
 	}
-	<-isClosed
+	<-c.isClosed
 }
 
-
-func NewComsumer(connStr,exchange,queue,routeKey,kind string,autoAck bool,handlePool int)*comsumer{
-	return &comsumer{
+// connStr 连接字符串
+// exchange exchange 名字
+// queue queue 名字
+// routeKey exchange 与queue 绑定key
+// kind exchange的Type direct fanout headers topic
+// autoAck 回应确认，暂未用
+// handlePool 消费者处理个数
+func NewConsumer(connStr,exchange,queue,routeKey,kind string,autoAck bool,handlePool int)*consumer{
+	return &consumer{
 		mqConnStr:connStr,
 		exchangeName:exchange,
 		queueName:queue,
@@ -58,14 +64,17 @@ func NewComsumer(connStr,exchange,queue,routeKey,kind string,autoAck bool,handle
 		autoAck:autoAck,
 		handlePool:handlePool,
 		chanClients:make([]*chanClient,0,1024),
+		isClosed:make(chan int),
 	}
 }
 
-func (c *comsumer) RegisterHandleFunc(this func([]byte) error){
+func (c *consumer) RegisterHandleFunc(this func([]byte) error){
 	c.handleFunc=this
 }
 
-func (c *comsumer) newConn()error{
+
+
+func (c *consumer) newConn()error{
 	conn,err := amqp.Dial(c.mqConnStr)
 	if err!=nil{
 		return err
@@ -75,28 +84,34 @@ func (c *comsumer) newConn()error{
 }
 
 
-func (c *comsumer) newChanel() (*amqp.Channel,error){
+func (c *consumer) newChanel() (*amqp.Channel,error){
 	if c.connClient == nil{
 		err:= c.newConn()
 		if err !=nil{
 			return nil,err
 		}
 	}
-	mychan,err:= c.connClient.Channel()
+	myChan,err:= c.connClient.Channel()
 	if err!=nil{
 		return nil,err
 	}
-	err = mychan.ExchangeDeclare(c.exchangeName,c.kind,true,false,false,false,nil)
+	err = myChan.ExchangeDeclare(c.exchangeName,c.kind,true,false,false,false,nil)
 	if err !=nil {
 		return nil,err
 	}
-	_,err =mychan.QueueDeclare(c.queueName,true,false,false,false,nil)
+	_,err =myChan.QueueDeclare(c.queueName,true,false,false,false,nil)
 	if err !=nil {
 		return nil,err
 	}
-	err = mychan.QueueBind(c.queueName,c.routeKey,c.exchangeName,false,nil)
+	err = myChan.QueueBind(c.queueName,c.routeKey,c.exchangeName,false,nil)
 	if err !=nil {
 		return nil,err
 	}
-	return mychan,nil
+	return myChan,nil
+}
+
+func (c *consumer) CloseConnection()error{
+	err:= c.connClient.Close()
+	c.isClosed<-1
+	return err
 }

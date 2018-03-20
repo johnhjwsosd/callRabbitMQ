@@ -1,15 +1,20 @@
 # 调用rabbitMQ
 方便调用MQ封装。
 
-## Server
+
+
+## Producer
 ```
 	p:= serverMq.NewProducer(mqConnStr,exchange,queue,queueKey,kind,true)
 	p.Push([]byte("test"))
 
 ```
-## Client
+
+参数
+
+## Consumer
 ```
-	c := clientMq.NewComsumer(mqConnStr,exchange,queue,queueKey,kind,true,2)
+	c := clientMq.NewConsumer(mqConnStr,exchange,queue,queueKey,kind,true,2)
 	c.RegisterHandleFunc(test)
 	go c.Pull()   //阻塞方法
     // ---------------------------

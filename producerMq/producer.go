@@ -1,4 +1,4 @@
-package serverMq
+package producerMq
 
 import (
 	"fmt"
@@ -60,22 +60,22 @@ func (s *producer) newSerConn() (*amqp.Channel,error){
 			return nil,err
 		}
 	}
-	mychan,err:= s.connClient.Channel()
+	myChan,err:= s.connClient.Channel()
 	if err!=nil{
 		return nil,err
 	}
-	err = mychan.ExchangeDeclare(s.exchangeName,s.kind,true,false,false,false,nil)
+	err = myChan.ExchangeDeclare(s.exchangeName,s.kind,true,false,false,false,nil)
 	if err !=nil {
 		return nil,err
 	}
-	_,err =mychan.QueueDeclare(s.queueName,true,false,false,false,nil)
+	_,err =myChan.QueueDeclare(s.queueName,true,false,false,false,nil)
 	if err !=nil {
 		return nil,err
 	}
-	err = mychan.QueueBind(s.queueName,s.routeKey,s.exchangeName,false,nil)
+	err = myChan.QueueBind(s.queueName,s.routeKey,s.exchangeName,false,nil)
 	if err !=nil {
 		return nil,err
 	}
-	return mychan,nil
+	return myChan,nil
 }
 
