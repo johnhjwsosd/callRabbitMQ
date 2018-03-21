@@ -3,6 +3,7 @@ package consumerMq
 import (
 	"github.com/streadway/amqp"
 	"fmt"
+	"time"
 )
 
 type consumer struct{
@@ -17,10 +18,17 @@ type consumer struct{
 	connClient *amqp.Connection
 	chanClients []*chanClient
 	isClosed chan int
+
+	handlerRetry *HandleRetryInfo
 }
 type chanClient struct{
 	chanDelivery <-chan amqp.Delivery
 	chanel *amqp.Channel
+}
+
+type HandleRetryInfo struct{
+	handleCount int
+	handleTime time.Duration
 }
 
 func (c *consumer) Pull(){
@@ -36,11 +44,11 @@ func (c *consumer) Pull(){
 		}
 		c.chanClients[i].chanDelivery,err = c.chanClients[i].chanel.Consume(c.queueName,"test",c.autoAck,false,false,false,nil)
 		if err!=nil{
-			fmt.Println("client", i," get err : ",err)
+			fmt.Println("consumer", i," consume err : ",err)
 		}
 		go func(msg <-chan amqp.Delivery){
 			for body :=range msg{
-				c.handleFunc(body.Body)
+				err = c.handleFunc(body.Body)
 			}
 		}(c.chanClients[i].chanDelivery)
 	}
@@ -52,7 +60,7 @@ func (c *consumer) Pull(){
 // queue queue 名字
 // routeKey exchange 与queue 绑定key
 // kind exchange的Type direct fanout headers topic
-// autoAck 回应确认，暂未用
+// autoAck 自动回应确认
 // handlePool 消费者处理个数
 func NewConsumer(connStr,exchange,queue,routeKey,kind string,autoAck bool,handlePool int)*consumer{
 	return &consumer{
@@ -103,8 +111,13 @@ func (c *consumer) newChanel() (*amqp.Channel,error){
 	if err !=nil {
 		return nil,err
 	}
+	myChan.
 	err = myChan.QueueBind(c.queueName,c.routeKey,c.exchangeName,false,nil)
 	if err !=nil {
+		return nil,err
+	}
+	err = myChan.Qos(1,0,false)
+	if err!=nil{
 		return nil,err
 	}
 	return myChan,nil

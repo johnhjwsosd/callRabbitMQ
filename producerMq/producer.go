@@ -1,57 +1,103 @@
 package producerMq
 
 import (
-	"fmt"
 	"github.com/streadway/amqp"
+	"time"
+	"fmt"
+	"errors"
 )
 
-type producer struct{
+type Producer struct{
 	mqConnStr string
 	exchangeName string
 	queueName string
 	kind string
 	routeKey string
-	autoAck bool
 	connClient *amqp.Connection
 	*amqp.Channel
 
+	reConnInfo *ReconnectionInfo
 }
 
+type ReconnectionInfo struct{
+	ReconnectionCounts int
+	ReconnectionTime time.Duration
+}
 
-// connStr 连接字符串
-// exchange exchange 名字
-// queue queue 名字
-// routeKey exchange 与queue 绑定key
-// kind exchange的Type direct fanout headers topic
-// autoAck 回应确认，暂未用
-func NewProducer(connStr,exchange,queue,routeKey,kind string,autoAck bool) *producer{
-	return &producer{
-		mqConnStr:connStr,
-		exchangeName:exchange,
-		queueName:queue,
-		kind:kind,
-		routeKey:routeKey,
-		autoAck:autoAck,
+func NewProducer(connStr,exchange,queue,routeKey,kind string,reConnInfo *ReconnectionInfo) *Producer{
+	return &Producer{
+		mqConnStr:    connStr,
+		exchangeName: exchange,
+		queueName:    queue,
+		kind:         kind,
+		routeKey:     routeKey,
+		reConnInfo:reConnInfo,
 	}
 }
 
-//todo:处理data
-func (s *producer) Push(body []byte,data ...interface{}){
+
+func (s *Producer) Push(body []byte,data ...interface{})error{
 	if s.Channel==nil {
-		chanel, err := s.newSerConn()
+		chanel, err := s.newProChannel()
 		if err !=nil{
-			fmt.Println("occur connection fatal :",err)
-			return
+			return err
 		}
 		s.Channel = chanel
 	}
-	s.Publish(s.exchangeName,s.routeKey,false,false,amqp.Publishing{
+	err:= s.Publish(s.exchangeName,s.routeKey,false,false,amqp.Publishing{
 		Body:body,
 	})
+	if err!=nil{
+		if err == amqp.ErrClosed{
+			if s.reConnInfo == nil{
+				return err
+			}else {
+				fmt.Println("Producer connetion occur fatal,try reconnection")
+				i :=1
+				err = s.reconnection(i)
+				if err!=nil{
+					return err
+				}else {
+					s.Push(body, data) //重发链接中断的包
+				}
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 
-func (s *producer) newConn()error{
+func (s *Producer) reconnection(i int)error{
+	fmt.Println("Producer reconnection  times :",i)
+	err := s.newConn()
+	if err !=nil{
+		if i>= s.reConnInfo.ReconnectionCounts{
+			fmt.Println("Producer reconnection fatal")
+			return errors.New("Producer reconnection fatal")
+		}
+		i++
+		time.Sleep(s.reConnInfo.ReconnectionTime)
+		return s.reconnection(i)
+	}
+	fmt.Println("Producer Reconnection Success")
+	s.Channel=nil
+	return nil
+}
+
+//todo:传入参数
+func getPushDate(data ...interface{}){
+	for _,v :=range data{
+		switch v.(type){
+		case bool:
+
+		case byte:
+		}
+	}
+}
+
+
+func (s *Producer) newConn()error{
 	conn,err := amqp.Dial(s.mqConnStr)
 	if err!=nil{
 		return err
@@ -60,7 +106,7 @@ func (s *producer) newConn()error{
 	return nil
 }
 
-func (s *producer) newSerConn() (*amqp.Channel,error){
+func (s *Producer) newProChannel() (*amqp.Channel,error){
 	if s.connClient == nil{
 		err:= s.newConn()
 		if err !=nil{
@@ -86,3 +132,10 @@ func (s *producer) newSerConn() (*amqp.Channel,error){
 	return myChan,nil
 }
 
+func (s *Producer) CloseConnection()error{
+	err:= s.connClient.Close()
+	if err == amqp.ErrClosed{
+		return nil
+	}
+	return err
+}
