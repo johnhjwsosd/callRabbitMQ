@@ -11,25 +11,22 @@ import (
 )
 
 const (
-	mqConnStr  = `amqp://ll:123qwe@www.denlery.top:5672/`
-	exchange ="test.topic.1"
-	queue = "test.topic.queue.1"
+	mqConnStr  = `amqp://ll:123qwe@118.31.32.168:5672/`
+	exchange ="test.topic.12"
+	queue = "test.topic.queue.12"
 	queueKey = "t1"
 	kind="topic"
 )
 
 func main(){
 
-	p:= producerMq.NewProducer(mqConnStr,exchange,queue,queueKey,kind,&producerMq.ReconnectionInfo{2,time.Second*5})
+	p:= producerMq.NewProducer(mqConnStr,exchange,queue,queueKey,kind,&producerMq.ReconnectionInfo{5,time.Second*5})
 	go push(p)
 	fmt.Println("=================+++")
 
-	c := consumerMq.NewConsumer(mqConnStr,exchange,queue,queueKey,kind,true,1)
+	c := consumerMq.NewConsumer(mqConnStr,exchange,queue,queueKey,kind,true,20)
 	c.RegisterHandleFunc(test1)
-	c.Pull()
-	//go base.Push()
-	//time.Sleep(time.Second*1)
-	//consume()
+	c.Run()
 }
 
 func test(content []byte)error{
@@ -48,7 +45,7 @@ func push(p *producerMq.Producer){
 		time.Sleep(time.Millisecond * 1000)
 		err := p.Push([]byte("test   "+strconv.Itoa(i)))
 		if err != nil {
-			fmt.Println("pushing :", err)
+			fmt.Println("producer :", err)
 			return
 		}
 	}

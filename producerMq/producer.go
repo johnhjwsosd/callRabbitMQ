@@ -52,7 +52,7 @@ func (s *Producer) Push(body []byte,data ...interface{})error{
 			if s.reConnInfo == nil{
 				return err
 			}else {
-				fmt.Println("Producer connetion occur fatal,try reconnection")
+				fmt.Println("Producer connetion occur error,try reconnection")
 				i :=1
 				err = s.reconnection(i)
 				if err!=nil{
@@ -69,11 +69,10 @@ func (s *Producer) Push(body []byte,data ...interface{})error{
 
 
 func (s *Producer) reconnection(i int)error{
-	fmt.Println("Producer reconnection  times :",i)
+	fmt.Println("Producer  reconnection  times :",i)
 	err := s.newConn()
 	if err !=nil{
 		if i>= s.reConnInfo.ReconnectionCounts{
-			fmt.Println("Producer reconnection fatal")
 			return errors.New("Producer reconnection fatal")
 		}
 		i++
@@ -100,6 +99,7 @@ func getPushDate(data ...interface{}){
 func (s *Producer) newConn()error{
 	conn,err := amqp.Dial(s.mqConnStr)
 	if err!=nil{
+		fmt.Println("producer connection fatal :",err)
 		return err
 	}
 	s.connClient= conn
