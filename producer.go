@@ -1,4 +1,4 @@
-package producerMq
+package callRabbitMQ
 
 import (
 	"github.com/streadway/amqp"
@@ -16,23 +16,31 @@ type Producer struct{
 	connClient *amqp.Connection
 	*amqp.Channel
 
-	reConnInfo *ReconnectionInfo
+	reConnInfo *reconnectionInfo
 }
 
-type ReconnectionInfo struct{
-	ReconnectionCounts int
-	ReconnectionTime time.Duration
-}
 
-func NewProducer(connStr,exchange,queue,routeKey,kind string,reConnInfo *ReconnectionInfo) *Producer{
+// NewProducer 创建一个生产者对象
+// connStr 连接字符串
+// exchange exchange 名字
+// queue queue 名字
+// routeKey exchange 与queue 绑定key
+// kind exchange的Type direct fanout headers topic
+func NewProducer(connStr,exchange,queue,routeKey,kind string) *Producer{
 	return &Producer{
 		mqConnStr:    connStr,
 		exchangeName: exchange,
 		queueName:    queue,
 		kind:         kind,
 		routeKey:     routeKey,
-		reConnInfo:reConnInfo,
 	}
+}
+
+// SetReconnectionInfo 设置重连信息
+// reConnCounts 重连次数
+// reConnTime 重连间隔时间
+func (s *Producer) SetReconnectionInfo(reConnCounts int,reConnTime time.Duration){
+	s.reConnInfo = &reconnectionInfo{reConnCounts,reConnTime}
 }
 
 
@@ -73,7 +81,7 @@ func (s *Producer) reconnection(i int)error{
 	err := s.newConn()
 	if err !=nil{
 		if i>= s.reConnInfo.ReconnectionCounts{
-			return errors.New("Producer reconnection fatal")
+			return errors.New("Producer reconnection fatal ,Closed")
 		}
 		i++
 		time.Sleep(s.reConnInfo.ReconnectionTime)

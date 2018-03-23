@@ -1,9 +1,7 @@
 package main
 
 import (
-	"github.com/johnhjwsosd/callRabbitMQ/producerMq"
-	"github.com/johnhjwsosd/callRabbitMQ/consumerMq"
-
+	"github.com/johnhjwsosd/callRabbitMQ"
 	"fmt"
 	"time"
 	"strconv"
@@ -19,12 +17,14 @@ const (
 )
 
 func main(){
-
-	p:= producerMq.NewProducer(mqConnStr,exchange,queue,queueKey,kind,&producerMq.ReconnectionInfo{5,time.Second*5})
+	p:= callRabbitMQ.NewProducer(mqConnStr,exchange,queue,queueKey,kind)
+	p.SetReconnectionInfo(10,time.Second*10)
 	go push(p)
 	fmt.Println("=================+++")
 
-	c := consumerMq.NewConsumer(mqConnStr,exchange,queue,queueKey,kind,true,20)
+	c := callRabbitMQ.NewConsumer(mqConnStr,exchange,queue,queueKey,kind,false,20)
+	c.SetReconnectionInfo(100) //心跳时间5秒
+	c.SetRetryInfo(5,time.Second*1,false)
 	c.RegisterHandleFunc(test1)
 	c.Run()
 }
@@ -40,9 +40,9 @@ func test1(content []byte)error{
 	return errors.New("test err")
 }
 
-func push(p *producerMq.Producer){
-	for i:=0;;i++ {
-		time.Sleep(time.Millisecond * 1000)
+func push(p *callRabbitMQ.Producer){
+	for i:=0;i<10;i++ {
+		time.Sleep(time.Millisecond * 100)
 		err := p.Push([]byte("test   "+strconv.Itoa(i)))
 		if err != nil {
 			fmt.Println("producer :", err)

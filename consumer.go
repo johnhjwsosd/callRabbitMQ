@@ -1,9 +1,10 @@
-package consumerMq
+package callRabbitMQ
 
 import (
 	"github.com/streadway/amqp"
 	"fmt"
 	"time"
+	"errors"
 )
 
 type consumer struct{
@@ -19,16 +20,12 @@ type consumer struct{
 	chanClients []*chanClient
 	isClosed chan int
 
-	handlerRetry *HandleRetryInfo
+	handlerFuncRetry *handleErrRetryInfo
+	reConnInfo *reconnectionInfo
 }
 type chanClient struct{
 	chanDelivery <-chan amqp.Delivery
 	chanel *amqp.Channel
-}
-
-type HandleRetryInfo struct{
-	handleCount int
-	handleTime time.Duration
 }
 
 func (c *consumer) pull(){
@@ -55,6 +52,7 @@ func (c *consumer) pull(){
 	<-c.isClosed
 }
 
+// NewConsumer 返回一个消费者对象，一个消费者共用一个链接
 // connStr 连接字符串
 // exchange exchange 名字
 // queue queue 名字
@@ -76,10 +74,25 @@ func NewConsumer(connStr,exchange,queue,routeKey,kind string,autoAck bool,handle
 	}
 }
 
+// RegisterHandleFunc 注册处理方法
+// this 处理方法
 func (c *consumer) RegisterHandleFunc(this func([]byte) error){
 	c.handleFunc=this
 }
 
+// SetReconnectionInfo 设置重连信息
+// reConnCounts 重连次数
+func (c *consumer) SetReconnectionInfo(reConnCounts int){
+	c.reConnInfo = &reconnectionInfo{ReconnectionCounts:reConnCounts}
+}
+
+// SetRetryInfo 设置处理函数返回ERROR重试信息
+// retryCounts 重试次数
+// retryTime 每次重试时间间隔
+// isRequeue 是否放回队列
+func (c *consumer) SetRetryInfo(retryCounts int,retryTime time.Duration, isRequeue bool){
+	c.handlerFuncRetry = &handleErrRetryInfo{retryCounts,retryTime,isRequeue}
+}
 
 
 func (c *consumer) newConn()error{
@@ -133,59 +146,73 @@ func (c *consumer) handleFuncACK(body amqp.Delivery){
 	if c.autoAck{
 		c.handleFunc(body.Body)
 	}else{
-		i :=0
-		for {
-			if i > 10 {
-				i = 0
-				body.Nack(false, true)
-				break
+		if c.handlerFuncRetry !=nil {
+			i := 0
+			for {
+				if i > c.handlerFuncRetry.handleCount {
+					i = 0
+					body.Nack(false,c.handlerFuncRetry.isrequeue)
+					break
+				}
+				err := c.handleFunc(body.Body)
+				i++
+				if err == nil {
+					i = 0
+					body.Ack(false)
+					break
+				}
+				time.Sleep(c.handlerFuncRetry.handleTime)
 			}
-			err := c.handleFunc(body.Body)
-			i++
-			if err == nil {
-				i = 0
-				body.Ack(false)
-				break
-			}
-			time.Sleep(time.Second * 1)
+		}else{
+			c.handleFunc(body.Body)
+			body.Nack(false, false)
 		}
 	}
 }
 
 func (c *consumer) Run()error{
+	ch :=make(chan int)
 	err:= c.newConn()
 	if err !=nil{
 		fmt.Println("consumer connection fatal :",err)
 		return err
 	}
-	go c.heartBeat()
+	go c.heartBeat(ch)
 
 	c.pull()
 
-	select{
-
-	}
-	return nil
+	<- ch
+	return errors.New("consumer connection error, closed")
 }
 
-func (c *consumer) heartBeat(){
-	i:=0
+func (c *consumer) heartBeat(closeCh chan int){
+	i:=1
 	for{
 		time.Sleep(time.Second * 5)
 		ch,err:= c.connClient.Channel()
 		if err == amqp.ErrClosed {
 			fmt.Println("Consumber Connection Occur Error ,Try Reconnection")
-			err := c.newConn()
-			i++
-			if err!=nil{
-				fmt.Println("Consumer  Reconnection times :",i)
+			if c.reConnInfo !=nil {
+				if i > c.reConnInfo.ReconnectionCounts{
+					fmt.Println("Consumber ReConnection  Fail ,Closed")
+					closeCh <- 1
+					return
+				}
+				err := c.newConn()
+				if err != nil {
+					fmt.Println("Consumer  Reconnection times :", i)
+					i++
+					continue
+				}
+				i = 1
+				fmt.Println("Consumer Reconnection Success")
+				c.chanClients = make([]*chanClient, 0, 1024)
+				go func() { c.isClosed <- 1 }()
+				go c.pull()
 				continue
 			}
-			fmt.Println("Consumer Reconnection Success")
-			c.chanClients = make([]*chanClient,0,1024)
-			c.isClosed<-1
-			go c.pull()
-			continue
+			closeCh <- 1
+			return
 		}
 		ch.Close()
 	}
