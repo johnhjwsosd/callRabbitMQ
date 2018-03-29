@@ -10,7 +10,6 @@ import (
 type Producer struct{
 	mqConnStr string
 	exchangeName string
-	queueName string
 	kind string
 	routeKey string
 	connClient *amqp.Connection
@@ -23,14 +22,12 @@ type Producer struct{
 // NewProducer 创建一个生产者对象
 // connStr 连接字符串
 // exchange exchange 名字
-// queue queue 名字
 // routeKey exchange 与queue 绑定key
 // kind exchange的Type direct fanout headers topic
-func NewProducer(connStr,exchange,queue,routeKey,kind string) *Producer{
+func NewProducer(connStr,exchange,routeKey,kind string) *Producer{
 	return &Producer{
 		mqConnStr:    connStr,
 		exchangeName: exchange,
-		queueName:    queue,
 		kind:         kind,
 		routeKey:     routeKey,
 	}
@@ -44,7 +41,7 @@ func (s *Producer) SetReconnectionInfo(reConnCounts int,reConnTime time.Duration
 }
 
 
-func (s *Producer) Push(body []byte,data ...interface{})error{
+func (s *Producer) Push(publishing amqp.Publishing)error{
 	if s.Channel==nil {
 		chanel, err := s.newProChannel()
 		if err !=nil{
@@ -52,9 +49,7 @@ func (s *Producer) Push(body []byte,data ...interface{})error{
 		}
 		s.Channel = chanel
 	}
-	err:= s.Publish(s.exchangeName,s.routeKey,false,false,amqp.Publishing{
-		Body:body,
-	})
+	err:= s.Publish(s.exchangeName,s.routeKey,false,false,publishing)
 	if err!=nil{
 		if err == amqp.ErrClosed{
 			if s.reConnInfo == nil{
@@ -66,7 +61,7 @@ func (s *Producer) Push(body []byte,data ...interface{})error{
 				if err!=nil{
 					return err
 				}else {
-					s.Push(body, data) //重发链接中断的包
+					s.Push(publishing) //重发链接中断的包
 				}
 			}
 		}
@@ -129,15 +124,10 @@ func (s *Producer) newProChannel() (*amqp.Channel,error){
 	if err !=nil {
 		return nil,err
 	}
-	_,err =myChan.QueueDeclare(s.queueName,true,false,false,false,nil)
-	if err !=nil {
-		return nil,err
-	}
-	err = myChan.QueueBind(s.queueName,s.routeKey,s.exchangeName,false,nil)
-	if err !=nil {
-		return nil,err
-	}
+
 	return myChan,nil
+
+
 }
 
 func (s *Producer) CloseConnection()error{

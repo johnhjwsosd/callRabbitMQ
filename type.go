@@ -10,5 +10,5 @@ type reconnectionInfo struct{
 type handleErrRetryInfo struct{
 	handleCount int
 	handleTime time.Duration
-	isrequeue bool
+	isRequeue bool
 }

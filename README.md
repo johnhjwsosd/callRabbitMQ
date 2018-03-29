@@ -6,12 +6,11 @@
 
 ## Producer
 ```
-    p:= callRabbitMQ.NewProducer(mqConnStr,exchange,queue,queueKey,kind)
-    p.SetReconnectionInfo(10,time.Second*10)
+	p:= callRabbitMQ.NewProducer(config.Producer.MqConnStr,config.Producer.Exchange,config.Producer.RouterKey,config.Producer.Kind)
+	p.SetReconnectionInfo(10,time.Second*5)
     p.Push([]byte("test"))
 ```
 
-参数
 
 ## Consumer
 ```
@@ -21,8 +20,8 @@
     c.SetRetryInfo(5,time.Second*1,false)
 	c.Run()
     // ---------------------------
-	func test(content []byte)error{
-    	fmt.Println(" Recevice :",string(content))
-    	return nil
+    func test1(content amqp.Delivery)error{
+        fmt.Println(" Recevice :",string(content.Body)," routerKey : ",content.RoutingKey)
+        return errors.New("test err")
     }
 ```

@@ -15,7 +15,7 @@ type consumer struct{
 	routeKey string
 	autoAck bool
 	handlePool int
-	handleFunc func([]byte)error
+	handleFunc func(amqp.Delivery)error
 	connClient *amqp.Connection
 	chanClients []*chanClient
 	isClosed chan int
@@ -58,7 +58,7 @@ func (c *consumer) pull(){
 // queue queue 名字
 // routeKey exchange 与queue 绑定key
 // kind exchange的Type direct fanout headers topic
-// autoAck 自动回应确认,如果为true 不会对处理函数返回错误而处理queue消息
+// autoAck 自动回应确认,如果为true 不会对处理函数返回错误而处理queue消息,为false每次只会消费1条消息直到ACK后。
 // handlePool 消费者处理个数
 func NewConsumer(connStr,exchange,queue,routeKey,kind string,autoAck bool,handlePool int)*consumer{
 	return &consumer{
@@ -76,7 +76,7 @@ func NewConsumer(connStr,exchange,queue,routeKey,kind string,autoAck bool,handle
 
 // RegisterHandleFunc 注册处理方法
 // this 处理方法
-func (c *consumer) RegisterHandleFunc(this func([]byte) error){
+func (c *consumer) RegisterHandleFunc(this func(delivery amqp.Delivery) error){
 	c.handleFunc=this
 }
 
@@ -144,17 +144,17 @@ func (c *consumer) CloseConnection()error{
 
 func (c *consumer) handleFuncACK(body amqp.Delivery){
 	if c.autoAck{
-		c.handleFunc(body.Body)
+		c.handleFunc(body)
 	}else{
 		if c.handlerFuncRetry !=nil {
 			i := 0
 			for {
 				if i > c.handlerFuncRetry.handleCount {
 					i = 0
-					body.Nack(false,c.handlerFuncRetry.isrequeue)
+					body.Nack(false,c.handlerFuncRetry.isRequeue)
 					break
 				}
-				err := c.handleFunc(body.Body)
+				err := c.handleFunc(body)
 				i++
 				if err == nil {
 					i = 0
@@ -164,7 +164,7 @@ func (c *consumer) handleFuncACK(body amqp.Delivery){
 				time.Sleep(c.handlerFuncRetry.handleTime)
 			}
 		}else{
-			c.handleFunc(body.Body)
+			c.handleFunc(body)
 			body.Nack(false, false)
 		}
 	}

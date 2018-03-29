@@ -1,0 +1,26 @@
+consumer:
+  mqConnStr: "amqp://ll:123qwe@118.31.32.168:5672/"
+  exchange: test.topic.12
+  queue:  test.topic.queue.12
+  routerKey: t1.*
+  kind: topic
+  autoAck: true
+  handlePool: 600
+
+  reconnectionInfo:
+    reconnectionCounts: 20
+
+  handleErrRetryInfo:
+    handleCount: 20
+    handleTime: 5000000000  # 初始值为ns
+    isRequeue: false
+
+producer:
+  mqConnStr: "amqp://ll:123qwe@118.31.32.168:5672/"
+  exchange: test.topic.12
+  routerKey: t1.r5
+  kind: topic
+
+  reconnectionInfo:
+    reconnectionCounts: 20
+    reconnectionTime: 5
