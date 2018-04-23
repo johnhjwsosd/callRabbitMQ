@@ -215,12 +215,14 @@ func (c *consumer) heartBeat(closeCh chan int){
 				continue
 			}
 		}else{
-			i++
-			continue
+			fmt.Println("Error MQ :",err)
+			go func() { c.isClosed <- 1 }()
+			closeCh <- 1
+			if ch!=nil {
+				ch.Close()
+			}
+			return
 		}
-		closeCh <- 1
-		if ch!=nil {
-			ch.Close()
-		}
+
 	}
 }
