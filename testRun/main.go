@@ -85,7 +85,7 @@ func main(){
 
 	p:= callRabbitMQ.NewProducer(config.Producer.MqConnStr,config.Producer.Exchange,config.Producer.RouterKey,config.Producer.Kind)
 	p.SetReconnectionInfo(10,time.Second*5)
-	go push(p)
+	//go push(p)
 	fmt.Println("=================+++")
 	c := callRabbitMQ.NewConsumer(config.Consumer.MqConnStr,config.Consumer.Exchange,config.Consumer.Queue,config.Consumer.RouterKey,config.Consumer.Kind,config.Consumer.AutoAck,config.Consumer.HandlePool)
 	c.SetReconnectionInfo(100) //心跳时间5秒
@@ -107,7 +107,7 @@ func test1(content amqp.Delivery)error{
 
 func push(p *callRabbitMQ.Producer){
 	for i:=0;;i++ {
-		time.Sleep(time.Millisecond * 2000)
+		time.Sleep(time.Millisecond * 1)
 		err := p.Push(amqp.Publishing{
 			Body:[]byte("test    "+strconv.Itoa(i)),
 		})

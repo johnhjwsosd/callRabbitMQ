@@ -45,7 +45,7 @@ func (c *consumer) pull(){
 		}
 		go func(msg <-chan amqp.Delivery){
 			for body :=range msg{
-				c.handleFuncACK(body)
+				go c.handleFuncACK(body)
 			}
 		}(c.chanClients[i].chanDelivery)
 	}
