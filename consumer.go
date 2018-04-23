@@ -214,6 +214,8 @@ func (c *consumer) heartBeat(closeCh chan int){
 			closeCh <- 1
 			return
 		}
-		ch.Close()
+		if ch!=nil {
+			ch.Close()
+		}
 	}
 }
