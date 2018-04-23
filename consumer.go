@@ -196,6 +196,9 @@ func (c *consumer) heartBeat(closeCh chan int){
 				if i > c.reConnInfo.ReconnectionCounts{
 					fmt.Println("Consumber ReConnection  Fail ,Closed")
 					closeCh <- 1
+					if ch!=nil {
+						ch.Close()
+					}
 					return
 				}
 				err := c.newConn()
@@ -211,9 +214,11 @@ func (c *consumer) heartBeat(closeCh chan int){
 				go c.pull()
 				continue
 			}
-			closeCh <- 1
-			return
+		}else{
+			i++
+			continue
 		}
+		closeCh <- 1
 		if ch!=nil {
 			ch.Close()
 		}
