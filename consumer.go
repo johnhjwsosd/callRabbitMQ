@@ -185,44 +185,51 @@ func (c *consumer) Run()error{
 	return errors.New("consumer connection error, closed")
 }
 
+
 func (c *consumer) heartBeat(closeCh chan int){
 	i:=1
 	for{
 		time.Sleep(time.Second * 5)
 		ch,err:= c.connClient.Channel()
-		if err == amqp.ErrClosed {
-			fmt.Println("Consumber Connection Occur Error ,Try Reconnection")
-			if c.reConnInfo !=nil {
-				if i > c.reConnInfo.ReconnectionCounts{
-					fmt.Println("Consumber ReConnection  Fail ,Closed")
-					closeCh <- 1
-					if ch!=nil {
-						ch.Close()
+		if err!=nil {
+			if err == amqp.ErrClosed {
+				fmt.Println("Consumber Connection Occur Error ,Try Reconnection")
+				if c.reConnInfo != nil {
+					if i > c.reConnInfo.ReconnectionCounts {
+						fmt.Println("Consumber ReConnection  Fail ,Closed")
+						c.close(closeCh)
+						if ch != nil {
+							ch.Close()
+						}
+						return
 					}
-					return
-				}
-				err := c.newConn()
-				if err != nil {
-					fmt.Println("Consumer  Reconnection times :", i)
-					i++
+					err := c.newConn()
+					if err != nil {
+						fmt.Println("Consumer  Reconnection times :", i)
+						i++
+						continue
+					}
+					i = 1
+					fmt.Println("Consumer Reconnection Success")
+					c.chanClients = make([]*chanClient, 0, 1024)
+					go func() { c.isClosed <- 1 }()
+					go c.pull()
 					continue
 				}
-				i = 1
-				fmt.Println("Consumer Reconnection Success")
-				c.chanClients = make([]*chanClient, 0, 1024)
-				go func() { c.isClosed <- 1 }()
-				go c.pull()
-				continue
+				c.close(closeCh)
+				return
 			}
-		}else{
-			fmt.Println("Error MQ :",err)
-			go func() { c.isClosed <- 1 }()
-			closeCh <- 1
-			if ch!=nil {
-				ch.Close()
-			}
+			fmt.Println("MQ Connections err :",err)
+			c.close(closeCh)
 			return
 		}
-
+		if ch !=nil{
+			ch.Close()
+		}
 	}
+}
+
+func(c *consumer) close(closeCh chan int){
+	go func() { c.isClosed <- 1 }()
+	closeCh <- 1
 }
